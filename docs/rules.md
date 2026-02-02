@@ -1,305 +1,372 @@
-# SentinelWX Rules
+# SentinelWX rules and non‑negotiables
 
-These rules are **mandatory** for all contributors and all AI tools working in this repository.  
-If existing code appears to conflict with these rules, **the rules win** and the code must be brought into compliance.
+These rules are mandatory for all contributors and all AI tools working in this repository.  
+If existing code appears to conflict with these rules, **the rules win** and the code must be brought into alignment.
 
----
+SentinelWX is treated as **safety‑critical** software.  
+Users are assumed to rely on it for real operational decisions (incident command, emergency management, serious weather operations).  
+Sloppy changes, speculative refactors, and “quick hacks” are not acceptable.
 
-## Table of contents
-
-1. [Purpose and scope](#1-purpose-and-scope)  
-2. [Data provenance and labeling](#2-data-provenance-and-labeling)  
-3. [Rust coding standards](#3-rust-coding-standards)  
-4. [Tests-first, Clippy, and fuzzing](#4-tests-first-clippy-and-fuzzing)  
-5. [Freeze model and change control](#5-freeze-model-and-change-control)  
-6. [Tasks, milestones, and scope](#6-tasks-milestones-and-scope)  
-7. [AI tools and `.aicode`](#7-ai-tools-and-aicode)  
-8. [Human responsibility](#8-human-responsibility)
+If you are unsure whether a change violates these rules, **stop and ask** before proceeding.
 
 ---
 
-## 1. Purpose and scope
+## 1. Safety, reliability, and scope
 
-- SentinelWX is a **safety-critical** weather situational awareness and operations tool.
-- Primary goals:
-  - Correctness and reliability under stress.
-  - Clear provenance and labeling of all data.
-  - Predictable, reviewable changes.
-- All human and AI work must:
-  - Align with `docs/architecture.md`, `docs/roadmap.md`, `docs/milestones.md`, and `docs/tasks.md`.
-  - Respect the freeze model defined in `docs/freeze.md`.
+1. SentinelWX must behave predictably under stress.
+   - No panics in normal operation.
+   - No silent data corruption.
+   - No unbounded resource usage without clear limits and backpressure.
 
----
+2. Safety beats convenience.
+   - Prefer explicit, defensive code over cleverness.
+   - Handle error cases explicitly; do not swallow errors.
 
-## 2. Data provenance and labeling
+3. Minimal scope.
+   - Each change should address a specific, documented need:
+     - A task in `docs/tasks.md`, or
+     - A clearly documented bug / requirement.
+   - Avoid scope creep and opportunistic refactors.
 
-Every data product must be clearly classified as:
-
-- **Official** — Products from official providers (e.g., NWS, SPC, NHC, USGS, etc.).
-- **Derived** — Diagnostics, composites, or value-adds built from official or other data.
-
-Rules:
-
-- Never present a derived product as an official one.
-- Always attribute sources:
-  - In code comments, **and**
-  - In `docs/architecture.md` or plugin-specific docs.
-- Do not add new external data sources without:
-  - Documenting them (endpoints, licensing/terms).
-  - Ensuring they are compatible with SentinelWX’s licensing and mission.
+4. Architecture is not optional.
+   - All changes must respect `docs/architecture.md` and `docs/roadmap.md`.
+   - If a change requires architectural adjustments, update the docs **first or alongside** the code.
 
 ---
 
-## 3. Rust coding standards
+## 2. Language and coding standards (Rust)
 
-### 3.1 Safety and error handling
+1. Use idiomatic Rust.
+   - Favor clarity over clever tricks.
+   - Avoid macro abuse unless it clearly improves safety or eliminates duplication.
 
-- **No panics in production paths**
-  - Avoid `unwrap`, `expect`, `panic!`, and similar in non-test code.
-  - If a panic is truly unavoidable, it must be:
-    - Explicitly documented in code with a clear justification, **and**
-    - Mentioned in `docs/architecture.md`.
+2. `unsafe` is effectively banned unless explicitly justified.
+   - New `unsafe` code requires:
+     - A clear, documented rationale.
+     - A short explanation in comments near the block.
+     - Review from a maintainer.
+   - All `unsafe` usage must show up in `cargo geiger` output and must be **intentional** and reviewed.[web:102]
 
-- **No `unsafe` by default**
-  - `unsafe` is forbidden unless:
-    - There is no reasonable safe alternative.
-    - The block is tightly scoped and heavily commented.
-    - The rationale is recorded in code and in `docs/architecture.md`.
-  - Any proposed `unsafe` must be called out for explicit human review.
+3. Error handling.
+   - Prefer `Result` and well‑typed errors over panics.
+   - Use `panic!` only for programmer errors that should never occur in production (and even then, prefer not to).
+   - Propagate errors upward when appropriate; do not silently ignore them.
 
-- **Error handling**
-  - Prefer explicit error types and `Result` over silently ignoring errors.
-  - Log operationally relevant failures with structured logging (e.g., via `tracing`).
-  - Do not swallow errors “for convenience”; propagate or handle them meaningfully.
+4. Logging and observability.
+   - Logging must not leak secrets or sensitive data.
+   - Logged messages must be useful under stress (concise, clear, structured where reasonable).
+   - Do not rely on logging as the sole mechanism for correctness; tests must assert behavior.
 
-### 3.2 Style and structure
-
-- Follow idiomatic Rust patterns consistent with the rest of the codebase.
-- Keep modules cohesive and focused; avoid god-objects or huge files where possible.
-- Public APIs should be:
-  - Well-named.
-  - Documented with `///` doc comments when non-trivial.
+5. Style.
+   - Use `cargo fmt` for code formatting.
+   - Follow the project’s existing patterns and conventions.
 
 ---
 
-## 4. Tests-first, Clippy, and fuzzing
+## 3. Tests‑first and verification philosophy
 
-Testing and static analysis are **central** to SentinelWX. Code is not considered done until it is clean under tests, linting, and (where applicable) fuzzing.
+All behavior changes and new features must be test‑driven.
 
-### 4.1 Tests-first principle
+1. Tests come first (or in tight lockstep).
+   - For any new behavior:
+     - Add or update tests to express the desired behavior.
+     - Prefer to make tests fail in the intended way before implementing code.
+   - Exceptions (e.g., mechanical refactoring) must still be covered by existing tests.
 
-When adding or changing behavior:
+2. Types of tests.
+   - Unit tests near the modules they exercise.
+   - Integration tests in `tests/` for cross‑module and end‑to‑end behavior.
+   - Fuzz tests for parsers, data transformations, and other complex logic that must be robust.
 
-- Prefer to write or update tests **before** or alongside the implementation.
-- Cover:
-  - Happy paths.
-  - Edge cases and error paths.
-  - Any regressions being fixed (add a regression test).
+3. Determinism.
+   - Tests must be deterministic and repeatable.
+   - Do not depend on external network services or nondeterministic timing.
 
-Types of tests:
+4. Coverage.
+   - Use `cargo llvm-cov` (or equivalent LLVM coverage) to monitor coverage levels, especially for safety‑critical code paths.[web:107][web:119][web:108]
+   - When you touch a module:
+     - Do not reduce its meaningful coverage.
+     - Prefer to increase coverage for critical logic.
 
-- **Unit tests**: for pure logic, parsing, small components.
-- **Integration tests**: for HTTP endpoints, background workers, cross-crate flows.
-- **Doc tests**: where appropriate, to ensure documentation examples stay correct.
-
-### 4.2 Mandatory commands
-
-Before marking a task as done or opening a PR, the following must hold:
-
-- `cargo test` succeeds (no failing tests).
-- `cargo clippy --all-targets --all-features -- -D warnings` succeeds (no warnings).
-- Where fuzz targets exist for the touched code:
-  - `cargo fuzz run <target>` has been run for a reasonable duration (or under CI) and does not produce crashes or panics.
-
-If any of these fail, you must:
-
-- Use the output to understand the issue.
-- Fix the underlying cause (not just silence the symptom).
-- Re-run until the tree is clean.
-
-### 4.3 Scope of tests
-
-- Do not add large features without corresponding tests.
-- Do not weaken existing tests to “force things green.”
-- When changing behavior:
-  - Update tests to reflect the *intended* new behavior.
-  - Remove or adjust obsolete tests explicitly; do not comment them out and leave them.
+5. Mutation testing (targeted).
+   - For safety‑critical modules, `cargo mutants` may be required as a task acceptance criterion.[web:102]
+   - When mutation testing is used:
+     - Surviving mutants must be investigated.
+     - Either:
+       - Add tests that kill them, or
+       - Document and justify why the equivalent behavior is acceptable.
 
 ---
 
-## 5. Freeze model and change control
+## 4. Tooling and analysis (core loop + extended tools)
 
-SentinelWX uses a **freeze model** to protect stable, critical files and modules.
+SentinelWX uses an **extended** toolchain.  
+The default expectation is: **run these tools, fix every issue they find, write tests where necessary, and repeat until clean.**[web:93][web:99][web:95]
 
-### 5.1 States
+### 4.1 Always‑run tools (per task / per PR)
 
-As defined in `docs/freeze.md`, each file or path is in one of three effective states:
+For any change that affects code or tests:
 
-- `mutable`
-  - Default state.
-  - Normal edits allowed, subject to all other rules.
+1. `cargo fmt`
+   - Code must be formatted before committing or opening a PR.
 
-- `review_only`
-  - AI tools must not modify these files.
-  - Humans may modify them sparingly, with explicit justification in the PR.
+2. `cargo test`
+   - Run the full test suite, unless there is a documented reason to narrow scope.
+   - All tests must pass.
 
-- `frozen`
-  - No edits allowed except:
-    - Critical bug fixes.
-    - Security fixes.
-  - Such changes must be:
-    - Narrow and well-reasoned.
-    - Called out explicitly in the PR description.
+3. `cargo clippy --all-targets --all-features -- -D warnings`
+   - All warnings are treated as errors.[web:32]
+   - Fix issues rather than silencing them.
+   - If you must allow a lint:
+     - Use the narrowest possible scope (`#[allow(...)]`).
+     - Add a short comment explaining why.
 
-### 5.2 Implementation
+4. `cargo fuzz run <target>`
+   - For each fuzz target relevant to changed code:
+     - Run `cargo fuzz run <target>`.
+   - Any crashes or unexpected behavior must be fixed and covered by tests.[web:110]
 
-- The authoritative list of frozen/review-only paths is `docs/freeze.md`.
-- Files may also contain in-file markers, for example:
+5. `cargo llvm-cov`
+   - Use `cargo llvm-cov` (or equivalent) to check coverage for modules you touched.[web:107][web:119][web:108]
+   - Do not regress coverage on safety‑critical paths.
+   - For new modules, aim for meaningful coverage, not just raw percentages.
 
-  ```rust
-  // SENTINELWX-FROZEN: Do not modify except for critical bug/security fixes with human approval.
-  // SENTINELWX-REVIEW-ONLY: AI must not modify this file; human edits only with justification.
-If docs/freeze.md and in-file markers disagree:
+6. `cargo nextest run` (optional but recommended for larger suites)
+   - May be used as a faster test runner, but does **not** replace `cargo test` in CI expectations.
 
-Treat the file as frozen and seek clarification.
+These tools define the **core loop** that must be clean before a task in `docs/tasks.md` can be marked complete.
 
-5.3 Rules
-Do not:
+### 4.2 Dependency and supply‑chain tools (run when deps change or periodically)
 
-Perform broad refactors that touch frozen or review_only files.
+When you modify `Cargo.toml`, `Cargo.lock`, features, or add/remove dependencies, you must treat supply‑chain and license risk as part of the change.[web:93][web:99][web:95][web:118]
 
-Reformat frozen files.
+Run:
 
-Move, rename, or delete frozen files without explicit human instruction.
+1. `cargo audit`
+   - Command: `cargo audit -D` or `cargo audit --deny-warnings`.[web:95][web:96][web:115]
+   - Any advisory or yanked crate is a **failure** until:
+     - The dependency is updated or removed, or
+     - The risk is explicitly documented and accepted by maintainers.
 
-When freezing or unfreezing:
+2. `cargo deny check`
+   - Use `cargo deny` to enforce:
+     - License policy (e.g., no incompatible licenses).
+     - Sources and advisory policy.[web:118]
+   - Failures must be fixed or explicitly waived by maintainers.
 
-Update docs/freeze.md.
+3. `cargo udeps`
+   - Detect unused dependencies.
+   - Remove unused entries from `Cargo.toml` or justify why they remain.[web:93][web:94]
 
-Add, update, or remove the in-file marker.
+4. `cargo machete`
+   - Detect unused features and tighten feature flags.
 
-Ensure the module is well-tested before freezing.
+5. `cargo outdated`
+   - Identify outdated dependencies.
+   - For upgrade work:
+     - Bring selected crates up to date.
+     - Ensure tests and extended tools remain clean.
+   - It is acceptable to leave some crates outdated, but choices must be deliberate and documented in PRs or issues.[web:99]
 
-6. Tasks, milestones, and scope
-Work must be task-driven, not free-form.
+6. `cargo minimal-versions`
+   - Validate that the project builds with minimal compatible versions.
+   - Helps enforce MSRV and compatibility guarantees.
 
-docs/roadmap.md defines high-level milestones.
+7. `cargo msrv`
+   - Check the minimum supported Rust version, especially when dependencies or language features change.
 
-docs/milestones.md tracks progress and links milestones to tasks.
+8. `cargo vet`
+   - Use for high‑assurance dependency vetting.
+   - New dependencies should pass `cargo vet` policy where configured.
 
-docs/tasks.md is the source of truth for concrete, actionable work.
+9. `cargo supply-chain`
+   - Inspect who maintains dependencies and where they come from.
+   - For safety‑critical components, maintainers may require explicit review of `cargo supply-chain` output.
 
-Rules:
+10. SBOM and license reporting:
+    - `cargo about`, `cargo sbom`, `cargo cyclonedx`
+    - Used primarily for releases and milestone work that touches compliance.
+    - Generated SBOMs and license reports must be stored or referenced as part of release artifacts.
 
-Do not invent new large features without adding or updating entries in:
+### 4.3 Safety and API stability tools
 
-docs/roadmap.md (scope-level change),
+For safety‑critical modules and public APIs:
 
-docs/milestones.md (milestone-level),
+1. `cargo geiger`
+   - Run to detect `unsafe` usage.
+   - New `unsafe` blocks are not allowed without explicit maintainer review and justification.[web:102]
 
-docs/tasks.md (fine-grained tasks).
+2. `cargo semver-checks`
+   - When versioning artifacts or changing public APIs:
+     - Run `cargo semver-checks` to ensure no unintended breaking changes.
+   - Breaking changes must be intentional, documented, and aligned with `docs/roadmap.md`.
 
-Do not silently change the scope of an existing task.
+3. `cargo careful`
+   - For certain tasks, maintainers may require `cargo careful` builds/tests to catch UB‑like issues.
+   - Failures must be treated as bugs and fixed.
 
-If scope must change, edit the task description and/or add a new task.
+4. `cargo mutants`
+   - Mutation testing for critical logic paths.
+   - Used selectively as part of hardening milestones.
+   - Surviving mutants require new tests or explicit, documented justification.
 
-Only mark tasks complete when:
+### 4.4 Failure semantics
 
-Acceptance criteria are met.
+By default:
 
-Tests, Clippy, and fuzzing (where relevant) are clean.
-
-Any necessary documentation updates are done.
-
-7. AI tools and .aicode
-AI tools (Claude Code, Antigravity, and similar) are allowed but tightly controlled.
-
-7.1 Required reading
-Before editing, an AI tool must:
-
-Load .aicode from the repo root (primary AI instructions).
-
-Read and obey:
-
-docs/rules.md (this file),
-
-docs/architecture.md,
-
-docs/roadmap.md,
-
-docs/milestones.md,
-
-docs/tasks.md,
-
-docs/freeze.md.
-
-If anything in the code conflicts with these documents, the documents win.
-
-7.2 Behavior requirements
-AI tools must:
-
-Pick work only from docs/tasks.md, unless the human explicitly assigns a different task.
-
-Work on one task at a time.
-
-Before making edits:
-
-Check docs/freeze.md and in-file markers to avoid frozen / review_only files.
-
-For each task:
-
-Read the task description and acceptance criteria.
-
-Identify which files will be touched.
-
-Implement tests and code to satisfy the task, with minimal, reviewable changes.
-
-After edits:
-
-Run cargo test.
-
-Run cargo clippy --all-targets --all-features -- -D warnings.
-
-Run relevant fuzz targets if they exist for the touched code.
-
-Use failure output to correct issues and repeat until clean.
-
-Only when the task is truly complete may the AI:
-
-Change the corresponding checkbox in docs/tasks.md from [ ] to [x].
-
-Suggest (but not enforce) freezing particularly stable modules, deferring the actual freeze decision to a human.
-
-7.3 Prohibited AI behaviors
-AI tools must not:
-
-Edit frozen or review_only files unless a human explicitly overrides for a specific change.
-
-Bypass tests, Clippy, or fuzzing to “save time.”
-
-Add new dependencies or introduce new external services without clear justification and documentation.
-
-Modify licensing, headers, or legal text.
-
-Mass-reformat or mass-refactor the codebase.
-
-8. Human responsibility
-Even with strong rules and AI assistance, humans are ultimately responsible for:
-
-Reviewing all changes.
-
-Enforcing these rules.
-
-Deciding when to freeze or unfreeze files.
-
-No change should be merged without:
-
-A human reading the diff.
-
-Confirming:
-
-Tests, Clippy, and fuzzing (where applicable) are clean.
-
-The change is within scope and consistent with this document.
-
-If you are unsure whether a change violates these rules, err on the side of caution and discuss it before merging.
+- Any failure or warning from:
+  - `cargo fmt`
+  - `cargo test`
+  - `cargo clippy --all-targets --all-features -- -D warnings`
+  - `cargo fuzz run <target>`
+  - `cargo llvm-cov` (coverage regressions on critical paths)
+  - `cargo audit`, `cargo deny`, `cargo udeps`, `cargo geiger`, `cargo semver-checks`
+- Must be treated as a **blocker** until:
+  - The underlying issue is fixed (with tests as needed), or
+  - Maintainers explicitly decide to accept a documented risk or limitation.
+
+Tools like `cargo outdated`, `cargo minimal-versions`, `cargo msrv`, `cargo vet`, SBOM generators, and mutation testing are:
+- **Required** when specified in task acceptance criteria or milestone descriptions.
+- Otherwise, they are **strongly recommended** and should be run regularly by maintainers.
+
+---
+
+## 5. Freeze model and file states
+
+Freezing is how we protect stable or safety‑critical areas from accidental edits, especially by AI tools.  
+The authoritative description lives in `docs/freeze.md`.
+
+Key principles:
+
+1. Only humans (maintainers) decide when to:
+   - Mark files as `mutable`, `review_only`, or `frozen`.
+   - Change a file’s freeze state.
+
+2. AI tools must:
+   - Never change freeze states.
+   - Never edit `frozen` files.
+   - Only edit `review_only` files when explicitly instructed for a narrow change.
+
+3. Every file that participates in the freeze model must have:
+   - A registry entry in `docs/freeze.md` (at least for `review_only` and `frozen`).
+   - An in‑file `SENTINELWX-FREEZE-STATE` marker.
+
+4. When freeze state changes:
+   - Update both the registry and the in‑file marker.
+   - Run the core tool loop (tests, clippy, fuzz, etc.) to ensure stability.
+
+For full details, see `docs/freeze.md`.
+
+---
+
+## 6. Tasks, milestones, and roadmap discipline
+
+Work must be driven by documented tasks and milestones:
+
+1. Roadmap and milestones.
+   - `docs/roadmap.md` defines milestones M0–M8 and high‑level goals.
+   - `docs/milestones.md` provides:
+     - A short goal sentence per milestone.
+     - Status (`Not started / In progress / Complete`).
+     - A pointer to `docs/tasks.md`.
+
+2. Tasks.
+   - `docs/tasks.md` is the single source of truth for concrete tasks:
+     - Each task has an ID (e.g., `M0-001`), description, “files to touch,” and acceptance criteria.
+   - Tasks must:
+     - Refer back to milestones and roadmap where appropriate.
+     - Include acceptance criteria that require:
+       - Tests updated/added.
+       - Core tools clean (`cargo fmt`, `cargo test`, `cargo clippy`, relevant fuzz).
+       - Extended tools clean when dependencies, public APIs, or safety‑critical modules are affected.
+
+3. One task at a time.
+   - Humans and AI tools should focus changes on one task per PR/branch where practical.
+   - Avoid mixing unrelated tasks.
+
+4. Who manages tasks and milestones.
+   - Only maintainers may:
+     - Add/remove milestones.
+     - Change milestone status.
+     - Re‑scope tasks or change IDs.
+   - Contributors may propose new tasks or changes via issues/PRs, but maintainers decide what becomes canonical.
+
+---
+
+## 7. AI responsibilities and constraints
+
+AI coding assistants (Claude Code, Antigravity, etc.) must obey all of the above, plus the additional instructions in `.aicode` and `docs/ai_coding_guidelines.md`.
+
+Key rules:
+
+1. Source of truth.
+   - `.aicode` is the primary AI instruction file.
+   - `docs/rules.md`, `docs/freeze.md`, `docs/tasks.md`, and `docs/ai_coding_guidelines.md` are binding.
+   - If in doubt, the AI must assume the strictest rule.
+
+2. Task‑driven.
+   - AI tools must:
+     - Pick tasks from `docs/tasks.md` (or use an explicit user‑specified ID).
+     - Work on one task at a time.
+     - Not invent new tasks or rewrite IDs on their own.
+
+3. Freeze respect.
+   - AI must:
+     - Check `docs/freeze.md` and in‑file markers before editing.
+     - Never edit `frozen` files.
+     - Only edit `review_only` files when explicitly instructed for a narrow change.
+   - If a task requires changing a protected file:
+     - AI must call this out and wait for a human to adjust freeze state or make the change.
+
+4. Tool loop.
+   - AI must:
+     - Implement the tests‑first, minimal‑change approach.
+     - Run the core tools:
+       - `cargo fmt`
+       - `cargo test`
+       - `cargo clippy --all-targets --all-features -- -D warnings`
+       - Relevant `cargo fuzz run <target>`
+       - `cargo llvm-cov` for coverage on touched modules
+     - When dependencies/public APIs/safety‑critical modules change, run extended tools as defined in section 4.
+     - Fix issues and iterate until everything is clean.
+     - Only then mark tasks as complete.
+
+5. Reporting.
+   - AI must:
+     - List the task ID.
+     - List files changed and their freeze state.
+     - State which tools were run and whether they passed.
+     - Highlight any remaining warnings/limitations.
+
+6. Refusal conditions.
+   - AI must refuse to:
+     - Edit frozen files.
+     - Ignore failing tests, clippy, fuzz, or extended tools.
+     - Perform broad refactors or architectural changes without explicit instruction.
+
+---
+
+## 8. Human maintainer responsibilities
+
+Maintainers are responsible for:
+
+1. Keeping `docs/` accurate and up to date.
+2. Managing freeze states and ensuring they reflect reality.
+3. Curating tasks and milestones.
+4. Enforcing:
+   - Tests‑first development.
+   - Strict tooling (core + extended) on code changes.
+   - Safety and security standards.
+
+They may:
+
+- Reject or request changes to PRs that:
+  - Skip required tools.
+  - Violate freeze rules.
+  - Introduce unsafe or unclear behavior.
+  - Drift from architecture and roadmap.
+
+---
+
+These rules exist to ensure SentinelWX remains trustworthy, predictable, and suitable for life‑critical operational use.  
+All contributors—human and AI—are expected to follow them strictly.
