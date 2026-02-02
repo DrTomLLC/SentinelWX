@@ -1,6 +1,9 @@
+
+## docs/README.md
+
 # SentinelWX Documentation
 
-This directory contains the design and process documentation for SentinelWX.  
+This directory contains the design and process documentation for SentinelWX. [web:161]  
 All code and contributions should align with these documents.
 
 ## Documents
@@ -19,7 +22,7 @@ All code and contributions should align with these documents.
   - Rust coding standards (no panics, no unsafe, exhaustive handling).
   - Licensing and scope boundaries.
 
-- `ai_coding_guidelines.md` (or `claude.md`)  
+- `ai_coding_guidelines.md`  
   Strict instructions for AI coding assistants:
   - How to follow architecture and rules.
   - What APIs may be used.
@@ -38,4 +41,4 @@ All code and contributions should align with these documents.
   Ensure prompts and reviews respect `ai_coding_guidelines.md` and `rules.md`.
 
 - **When contributing**:  
-  Follow `CONTRIBUTING.md` in the repo root and use these docs as the design source of truth.
+  Follow `CONTRIBUTING.md` in the repo root and use these docs as the design source of truth. [web:157][web:161]
