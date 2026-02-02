@@ -1,14 +1,27 @@
 # SentinelWX Rules
 
 These rules are **mandatory** for all contributors and all AI tools working in this repository.  
-If existing code appears to conflict with these rules, the rules win and the code must be brought into compliance.
+If existing code appears to conflict with these rules, **the rules win** and the code must be brought into compliance.
+
+---
+
+## Table of contents
+
+1. [Purpose and scope](#1-purpose-and-scope)  
+2. [Data provenance and labeling](#2-data-provenance-and-labeling)  
+3. [Rust coding standards](#3-rust-coding-standards)  
+4. [Tests-first, Clippy, and fuzzing](#4-tests-first-clippy-and-fuzzing)  
+5. [Freeze model and change control](#5-freeze-model-and-change-control)  
+6. [Tasks, milestones, and scope](#6-tasks-milestones-and-scope)  
+7. [AI tools and `.aicode`](#7-ai-tools-and-aicode)  
+8. [Human responsibility](#8-human-responsibility)
 
 ---
 
 ## 1. Purpose and scope
 
-- SentinelWX is a safety‑critical weather situational awareness and operations tool.
-- The primary goals are:
+- SentinelWX is a **safety-critical** weather situational awareness and operations tool.
+- Primary goals:
   - Correctness and reliability under stress.
   - Clear provenance and labeling of all data.
   - Predictable, reviewable changes.
@@ -20,15 +33,20 @@ If existing code appears to conflict with these rules, the rules win and the cod
 
 ## 2. Data provenance and labeling
 
-- Every data product must be clearly classified as:
-  - **Official** – Products from official providers (e.g., NWS, SPC, NHC, USGS, etc.).
-  - **Derived** – Diagnostics, composites, or value‑adds built from official or other data.
-- Rules:
-  - Never present a derived product as an official one.
-  - Always attribute sources in code comments and in `docs/architecture.md` or plugin‑specific docs.
-  - Do not add new external data sources without:
-    - Documenting them (endpoints, licensing/terms).
-    - Ensuring they are compatible with SentinelWX’s licensing and mission.
+Every data product must be clearly classified as:
+
+- **Official** — Products from official providers (e.g., NWS, SPC, NHC, USGS, etc.).
+- **Derived** — Diagnostics, composites, or value-adds built from official or other data.
+
+Rules:
+
+- Never present a derived product as an official one.
+- Always attribute sources:
+  - In code comments, **and**
+  - In `docs/architecture.md` or plugin-specific docs.
+- Do not add new external data sources without:
+  - Documenting them (endpoints, licensing/terms).
+  - Ensuring they are compatible with SentinelWX’s licensing and mission.
 
 ---
 
@@ -36,20 +54,20 @@ If existing code appears to conflict with these rules, the rules win and the cod
 
 ### 3.1 Safety and error handling
 
-- **No panics in production paths**:
-  - Avoid `unwrap`, `expect`, `panic!`, and similar in non‑test code.
+- **No panics in production paths**
+  - Avoid `unwrap`, `expect`, `panic!`, and similar in non-test code.
   - If a panic is truly unavoidable, it must be:
-    - Explicitly documented in code with a clear justification.
+    - Explicitly documented in code with a clear justification, **and**
     - Mentioned in `docs/architecture.md`.
 
-- **No `unsafe` by default**:
+- **No `unsafe` by default**
   - `unsafe` is forbidden unless:
     - There is no reasonable safe alternative.
     - The block is tightly scoped and heavily commented.
     - The rationale is recorded in code and in `docs/architecture.md`.
   - Any proposed `unsafe` must be called out for explicit human review.
 
-- **Error handling**:
+- **Error handling**
   - Prefer explicit error types and `Result` over silently ignoring errors.
   - Log operationally relevant failures with structured logging (e.g., via `tracing`).
   - Do not swallow errors “for convenience”; propagate or handle them meaningfully.
@@ -57,48 +75,47 @@ If existing code appears to conflict with these rules, the rules win and the cod
 ### 3.2 Style and structure
 
 - Follow idiomatic Rust patterns consistent with the rest of the codebase.
-- Keep modules cohesive and focused; avoid god‑objects or huge files where possible.
+- Keep modules cohesive and focused; avoid god-objects or huge files where possible.
 - Public APIs should be:
-  - Well‑named.
-  - Documented with `///` doc comments when non‑trivial.
+  - Well-named.
+  - Documented with `///` doc comments when non-trivial.
 
 ---
 
-## 4. Tests‑first, Clippy, and fuzzing
+## 4. Tests-first, Clippy, and fuzzing
 
-Testing and static analysis are **central** to SentinelWX. Code is not considered done until it is clean under tests, linting, and (where applicable) fuzzing. [web:211][web:216][web:220][web:225][web:228]
+Testing and static analysis are **central** to SentinelWX. Code is not considered done until it is clean under tests, linting, and (where applicable) fuzzing.
 
-### 4.1 Tests‑first principle
+### 4.1 Tests-first principle
 
-- When adding or changing behavior:
-  - Prefer to write or update tests **before** or alongside the implementation.
-  - Cover:
-    - Happy paths.
-    - Edge cases and error paths.
-    - Any regressions being fixed (add a regression test).
+When adding or changing behavior:
 
-- Types of tests:
-  - **Unit tests**:
-    - For pure logic, parsing, small components.
-  - **Integration tests**:
-    - For HTTP endpoints, background workers, cross‑crate flows.
-  - **Doc tests** where appropriate:
-    - To ensure examples in documentation stay correct.
+- Prefer to write or update tests **before** or alongside the implementation.
+- Cover:
+  - Happy paths.
+  - Edge cases and error paths.
+  - Any regressions being fixed (add a regression test).
+
+Types of tests:
+
+- **Unit tests**: for pure logic, parsing, small components.
+- **Integration tests**: for HTTP endpoints, background workers, cross-crate flows.
+- **Doc tests**: where appropriate, to ensure documentation examples stay correct.
 
 ### 4.2 Mandatory commands
 
 Before marking a task as done or opening a PR, the following must hold:
 
 - `cargo test` succeeds (no failing tests).
-- `cargo clippy --all-targets --all-features -- -D warnings` succeeds (no warnings). [web:202][web:211][web:219]
+- `cargo clippy --all-targets --all-features -- -D warnings` succeeds (no warnings).
 - Where fuzz targets exist for the touched code:
-  - `cargo fuzz run <target>` has been run for a reasonable duration (or under CI) and does not produce crashes or panics. [web:220][web:225][web:228]
+  - `cargo fuzz run <target>` has been run for a reasonable duration (or under CI) and does not produce crashes or panics.
 
 If any of these fail, you must:
 
 - Use the output to understand the issue.
 - Fix the underlying cause (not just silence the symptom).
-- Re‑run until the tree is clean.
+- Re-run until the tree is clean.
 
 ### 4.3 Scope of tests
 
@@ -112,37 +129,37 @@ If any of these fail, you must:
 
 ## 5. Freeze model and change control
 
-SentinelWX uses a **freeze model** to protect stable, critical files and modules. [web:183]
+SentinelWX uses a **freeze model** to protect stable, critical files and modules.
 
 ### 5.1 States
 
 As defined in `docs/freeze.md`, each file or path is in one of three effective states:
 
-- `mutable`:
+- `mutable`
   - Default state.
   - Normal edits allowed, subject to all other rules.
 
-- `review_only`:
+- `review_only`
   - AI tools must not modify these files.
   - Humans may modify them sparingly, with explicit justification in the PR.
 
-- `frozen`:
+- `frozen`
   - No edits allowed except:
     - Critical bug fixes.
     - Security fixes.
   - Such changes must be:
-    - Narrow and well‑reasoned.
+    - Narrow and well-reasoned.
     - Called out explicitly in the PR description.
 
 ### 5.2 Implementation
 
-- The authoritative list of frozen/review‑only paths is `docs/freeze.md`.
-- Files may also contain in‑file markers, for example:
+- The authoritative list of frozen/review-only paths is `docs/freeze.md`.
+- Files may also contain in-file markers, for example:
 
   ```rust
   // SENTINELWX-FROZEN: Do not modify except for critical bug/security fixes with human approval.
   // SENTINELWX-REVIEW-ONLY: AI must not modify this file; human edits only with justification.
-If docs/freeze.md and in‑file markers disagree:
+If docs/freeze.md and in-file markers disagree:
 
 Treat the file as frozen and seek clarification.
 
@@ -159,14 +176,14 @@ When freezing or unfreezing:
 
 Update docs/freeze.md.
 
-Add, update, or remove the in‑file marker.
+Add, update, or remove the in-file marker.
 
-Ensure the module is well‑tested before freezing.
+Ensure the module is well-tested before freezing.
 
 6. Tasks, milestones, and scope
-Work must be task‑driven, not free‑form.
+Work must be task-driven, not free-form.
 
-docs/roadmap.md defines high‑level milestones.
+docs/roadmap.md defines high-level milestones.
 
 docs/milestones.md tracks progress and links milestones to tasks.
 
@@ -176,11 +193,11 @@ Rules:
 
 Do not invent new large features without adding or updating entries in:
 
-docs/roadmap.md (if scope‑level change).
+docs/roadmap.md (scope-level change),
 
-docs/milestones.md (if milestone‑level).
+docs/milestones.md (milestone-level),
 
-docs/tasks.md (fine‑grained tasks).
+docs/tasks.md (fine-grained tasks).
 
 Do not silently change the scope of an existing task.
 
@@ -204,15 +221,15 @@ Load .aicode from the repo root (primary AI instructions).
 
 Read and obey:
 
-docs/rules.md (this file).
+docs/rules.md (this file),
 
-docs/architecture.md.
+docs/architecture.md,
 
-docs/roadmap.md.
+docs/roadmap.md,
 
-docs/milestones.md.
+docs/milestones.md,
 
-docs/tasks.md.
+docs/tasks.md,
 
 docs/freeze.md.
 
@@ -227,7 +244,7 @@ Work on one task at a time.
 
 Before making edits:
 
-Check docs/freeze.md and in‑file markers to avoid frozen/review_only files.
+Check docs/freeze.md and in-file markers to avoid frozen / review_only files.
 
 For each task:
 
@@ -264,12 +281,10 @@ Add new dependencies or introduce new external services without clear justificat
 
 Modify licensing, headers, or legal text.
 
-Mass‑reformat or mass‑refactor the codebase.
+Mass-reformat or mass-refactor the codebase.
 
 8. Human responsibility
-Even with strong rules and AI assistance:
-
-Humans are ultimately responsible for:
+Even with strong rules and AI assistance, humans are ultimately responsible for:
 
 Reviewing all changes.
 
