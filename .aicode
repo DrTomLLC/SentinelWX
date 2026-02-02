@@ -1,0 +1,215 @@
+# SentinelWX .aicode
+
+You are an AI coding assistant working on the SentinelWX repository.
+
+Your priorities, in order:
+
+1. Do not break safety‑critical guarantees.
+2. Obey freeze rules and never modify frozen files.
+3. Follow the project’s documented architecture and rules.
+4. Work only on explicitly listed tasks, one at a time.
+5. Keep changes small, well‑tested, and easy to review.
+
+============================================================
+= 1. Repository layout and key docs
+============================================================
+
+Treat these as the source of truth:
+
+- Root:
+  - README.md          – high‑level project overview.
+  - .aicode            – this file (AI instructions).
+  - CONTRIBUTING.md    – human contribution process and expectations.
+
+- Docs (all under docs/):
+  - docs/README.md             – documentation index.
+  - docs/architecture.md       – system architecture, data flow, components.
+  - docs/roadmap.md            – high‑level milestones.
+  - docs/rules.md              – non‑negotiable rules and constraints.
+  - docs/ai_coding_guidelines.md – additional AI‑specific rules (if present).
+  - docs/milestones.md         – milestone breakdown (more detail than roadmap).
+  - docs/tasks.md              – concrete, fine‑grained tasks with checkboxes.
+
+- Freeze control:
+  - docs/freeze.md             – central registry of frozen/review‑only files.
+
+Before editing any code, skim:
+
+- docs/rules.md
+- docs/architecture.md
+- docs/roadmap.md
+- docs/milestones.md
+- docs/tasks.md
+- docs/freeze.md
+
+============================================================
+= 2. Freeze and edit rules
+============================================================
+
+You MUST obey file freeze rules at all times.
+
+1. Check docs/freeze.md before modifying files.
+
+   - If a file/path is marked as:
+     - frozen: DO NOT MODIFY for any reason unless the user explicitly instructs you to unfreeze or override.
+     - review_only: Do not modify unless the user explicitly asks you to change that file and acknowledges the risk.
+     - mutable (or not listed): safe to modify subject to all other rules.
+
+2. Also check for in‑file markers at the top of files, such as:
+
+   - // SENTINELWX-FROZEN
+   - // SENTINELWX-REVIEW-ONLY
+
+   If such a marker is present, follow it even if docs/freeze.md is out of sync.
+   When in doubt, treat the file as frozen and ask the user.
+
+3. Never refactor, reformat, or “clean up” frozen or review_only files.
+
+4. Never move or rename frozen files without explicit user instruction.
+
+If the user explicitly overrides freeze rules in a message, you may follow
+that instruction for the specific file(s) they mention, but keep the change
+as small and surgical as possible.
+
+============================================================
+= 3. Task selection and scope
+============================================================
+
+You are NOT allowed to invent your own work. You must pick tasks from docs/tasks.md.
+
+Task workflow:
+
+1. Open docs/tasks.md.
+
+2. Identify the first unchecked task that:
+   - Is not marked as blocked or future.
+   - Is clearly within the user’s request (or they have pointed to a specific task).
+
+3. Work on ONE task at a time, unless the user explicitly asks you to batch several.
+
+4. Do NOT:
+
+   - Start new tasks while another is partially done.
+   - Add new tasks to docs/tasks.md unless the user asks.
+   - Change the scope of a task without being asked.
+
+5. For each selected task:
+
+   - Read any linked files and relevant sections in docs/architecture.md,
+     docs/rules.md, docs/milestones.md, and docs/roadmap.md.
+   - Plan a minimal, coherent change set that fully satisfies the task
+     and no more.
+
+============================================================
+= 4. Definition of done and checkbox updates
+============================================================
+
+“Completely Completed” means:
+
+1. All acceptance criteria for the task are satisfied:
+   - Behavior matches the description in docs/tasks.md and related docs.
+   - All relevant tests exist and pass (unit, integration, etc.).
+
+2. No TODO/FIXME is left behind for that task.
+3. The implementation is consistent with:
+   - docs/architecture.md
+   - docs/rules.md (no panics in production paths, no unsafe unless documented, etc.).
+4. The change is small enough to be realistically reviewed by a human.
+
+When a task is truly done:
+
+1. Update docs/tasks.md:
+   - Change the task checkbox from “[ ]” to “[x]”.
+   - If there is a short status or notes field, update it as needed.
+
+2. If appropriate, also update docs/milestones.md or docs/roadmap.md:
+   - Mark the relevant item as completed, if the task fully satisfies it.
+   - Do not mark an entire milestone complete unless all its tasks are done.
+
+3. Do not mark items as complete if:
+   - Tests are missing or failing.
+   - You are uncertain about any requirement.
+   - You have changed behavior beyond the task’s scope.
+
+============================================================
+= 5. When and how to freeze files
+============================================================
+
+You do NOT decide on your own to freeze files.
+Freezing is a human decision.
+
+Your role:
+
+1. When a task results in a file or module that appears stable, you may SUGGEST
+   in natural language that the user consider freezing it, but do not edit
+   docs/freeze.md unless the user explicitly asks.
+
+2. If the user instructs you to freeze a file:
+
+   - Add an entry to docs/freeze.md describing:
+     - state (frozen or review_only)
+     - path
+     - brief reason
+   - Add (or confirm) an in‑file marker such as:
+     - // SENTINELWX-FROZEN: Do not modify except for critical bug/security fixes with human approval.
+
+3. Once a file is frozen:
+   - Never propose edits to it in future changes.
+   - If a change seems necessary, clearly state that it conflicts with the freeze
+     and ask the user for explicit unfreeze/override instructions.
+
+============================================================
+= 6. Coding and testing standards (high level)
+============================================================
+
+Always follow docs/rules.md and docs/architecture.md. In particular:
+
+- Rust:
+  - No panics in production code paths.
+  - No unsafe code unless explicitly documented and justified.
+  - Structured error handling; no silent failures.
+  - Use existing logging/tracing patterns instead of ad‑hoc println! debugging.
+
+- HTTP / APIs:
+  - Follow existing routing, error, and response conventions.
+  - Update or add integration tests for new or changed endpoints.
+
+- Tests:
+  - Every non‑trivial behavior should have tests.
+  - If you fix a bug, add a regression test.
+
+If there is a conflict between a pattern you see in existing code and
+docs/rules.md, the docs win. In that case, mention the inconsistency and
+prefer the documented rule.
+
+============================================================
+= 7. Interaction style and safety
+============================================================
+
+- Be explicit about:
+  - Which task from docs/tasks.md you are implementing.
+  - Which files you plan to touch.
+
+- Prefer small, incremental PR‑sized changes over large refactors.
+
+- If you are uncertain about requirements, ask the user instead of guessing.
+
+- Never:
+  - Introduce new external dependencies without a strong reason.
+  - Change licensing headers or copyright.
+  - Remove safety checks or error handling to “simplify” code.
+
+============================================================
+= 8. Summary for tools
+============================================================
+
+If you are a tool integrating with this repo (e.g., Claude Code, Antigravity):
+
+1. Load .aicode from the repo root.
+2. Read docs/rules.md, docs/architecture.md, docs/roadmap.md,
+   docs/milestones.md, docs/tasks.md, and docs/freeze.md before making changes.
+3. Choose tasks ONLY from docs/tasks.md.
+4. Obey freeze rules from docs/freeze.md and in‑file markers.
+5. Keep changes minimal, well‑tested, and focused on a single task.
+6. Update checkboxes in docs/tasks.md only when a task is fully complete.
+7. Do not modify frozen or review_only files unless the user explicitly overrides.
