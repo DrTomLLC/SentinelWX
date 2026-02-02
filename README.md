@@ -1,49 +1,49 @@
 # SentinelWX
 
-All‑hazards, real‑time operational console for IC, EM, storm chasing, and operational meteorology, powered by official NOAA, USGS, and hyper‑local data.
+SentinelWX is a safety‑critical weather situational awareness and operations tool.  
+It ingests official weather and hazard data, normalizes it into a common model, and exposes it through a map‑centric UI and APIs for incident command, emergency management, and serious weather users. [web:209]
 
-## Project status
+## Status
 
-Early design / pre‑alpha. Core architecture and requirements are being defined before implementation.
+This project is in early development.  
+APIs, plugins, and UI are unstable and may change without notice.
 
-## Goals
+## Development philosophy
 
-- Single, professional console for:
-  - Incident Command (IC)
-  - Emergency Management (EM)
-  - Storm Chasing (SC)
-  - Operational Meteorology (OM)
-- Fuse official, authoritative feeds (NWS, SPC, NHC, NOAA, USGS, etc.) with hyper‑local data (personal stations, mPING, Ambient Weather, vendor feeds).
-- Near real‑time ingest and display, with per‑feed adaptive scheduling and push updates.
-- Clean, map‑first UI with role‑based global modes (Severe, Winter, Tropical, Hydro, Fire, Quakes, AQ/Smoke, OM, Chase, etc.).
-- Hyper‑local, rule‑based alerting for specific locations and areas.
-- Plugin‑driven architecture for data sources, diagnostics, and vendors.
-- Runs locally with maximum privacy; no third‑party tracking.
+SentinelWX uses a **tests‑first** approach wherever possible:
 
-## High‑level architecture
+- New behavior should be driven by tests (unit, integration, or fuzz tests) before or alongside implementation. [web:206]  
+- Code must compile cleanly, pass all tests, and pass linting (`cargo clippy`) with warnings treated as errors. [web:208][web:211]  
+- For critical parsing and boundary logic, fuzzing is strongly encouraged with tools like `cargo fuzz` or similar fuzz harnesses. [web:209]
 
-- **Core runtime (Rust)**
-  - Async ingest workers per source (NWS, SPC, NHC, GOES/GLM, MRMS/QPE, NOHRSC/SNODAS, USGS quakes, NIFC fire, mPING, Ambient, optional vendors).
-  - Central store + cache (time‑series + geospatial).
-  - Plugin system for data providers, diagnostics, and vendor integrations.
-  - HTTP API (REST + WebSocket/SSE) serving a local web UI and integrations (Home Assistant, etc.).
+Automation and AI tools (Claude Code, Antigravity, etc.) are expected to:
 
-- **Plugins**
-  - Official feeds: NWS, SPC, NHC, GOES/GLM, MRMS/QPE, NOHRSC, USGS, NIFC, NCEI/CDO, etc.
-  - Hyper‑local: Ambient Weather, personal stations, mPING, local incidents/resources.
-  - Vendor: lightning networks, AllisonHouse, and other paid sources (optional).
-  - Diagnostics/forecasting: mesoscale parameters, soundings, cross‑sections, model browser (later).
+- Pick tasks from `docs/tasks.md`.
+- Write or update tests first.
+- Run `cargo test`, `cargo clippy`, and any configured fuzz targets.
+- Use the output to iteratively correct issues until the tree is clean.
 
-- **Front‑end**
-  - Browser‑based, responsive map UI (desktop + Android/iOS).
-  - Role presets (IC/EM/SC/OM) and global modes (Severe, Winter, Tropical, Hydro, Fire, etc.).
-  - Layer manager, time slider, detail panels, alert indicators.
+## Features (planned)
 
-## Licensing
+- Core Rust backend with strict safety and reliability rules.
+- Plugin system for ingesting official feeds (NWS, SPC, NHC, radar, etc.).
+- Map UI with layers, time controls, and role/mode presets.
+- Alert rules engine for AO polygons and hyper‑local data.
+- Optional integrations (Home Assistant, vendor lightning, mesonets, training/replay).
 
-SentinelWX is dual‑licensed:
+For detailed milestones, see `docs/roadmap.md` and `docs/milestones.md`.
 
-- **Open‑source:** AGPL‑3.0, for community use and contributions.  
-- **Commercial:** A separate proprietary license is available for organizations that wish to use or modify SentinelWX without the obligations of the AGPL‑3.0.
+## Getting started
 
-See `LICENSE` and `LICENSE-COMMERCIAL` for details.
+### Prerequisites
+
+- Rust (stable toolchain).
+- A supported OS (Linux, macOS, or Windows).
+- Access to the public internet for official data sources.
+
+### Build and run
+
+```bash
+git clone https://github.com/<you>/sentinelwx.git
+cd sentinelwx
+cargo run
