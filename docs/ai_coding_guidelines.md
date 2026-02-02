@@ -1,138 +1,322 @@
-# AI Coding Guidelines (SentinelWX)
+# AI coding guidelines for SentinelWX
 
-These rules govern how AI coding assistants (e.g., Claude, Copilot) must be used on this repo. SentinelWX is treated as **safety‑critical** software.
+This document explains how AI coding assistants (Claude Code, Antigravity, etc.) must behave when working in the SentinelWX repository.  
+It complements `.aicode` and `docs/rules.md` and does **not** replace them.
 
-If any generated code conflicts with this document, it **must not** be merged.
+If there is any conflict:
 
-## 0. Safety‑critical mindset
+1. `.aicode` wins first.  
+2. Then `docs/rules.md`.  
+3. Then `docs/freeze.md`.  
+4. Then this file, `docs/tasks.md`, and `docs/milestones.md`.
 
-- Assume **lives depend on this code**.
-- Favor explicit, boring, and defensive code over cleverness.
-- Any uncertainty should be resolved by:
-  - Writing/expanding tests, and
-  - Requesting human review and clarification.
+When in doubt, follow the strictest rule and ask a human for clarification.
 
-## 1. Hard constraints
+---
 
-These are absolute; never violate them:
+## 1. What to read first
 
-1. **No panics in production paths**
-   - Do **not** use:
-     - `unwrap()`, `expect()`, `panic!()`, `assert!()` (outside of tests), or equivalents.
-   - All fallible operations must return `Result` or `Option` and be handled explicitly.
-   - If a situation is truly “impossible”, prefer:
-     - An explicit error variant, or
-     - A documented, carefully considered fallback behavior.
+When an AI tool attaches to this repo, it must load and read (in roughly this order):
 
-2. **All errors must be handled**
-   - Every `Result` and `Option` must be matched and handled.
-   - Handle **all** match arms; use `_` only if followed by safe, explicit behavior.
-   - No ignored errors (`let _ = some_result;`) unless accompanied by a clear, documented rationale and logging.
+1. **Root control and overview**
+   - `README.md`
+     - High‑level description of SentinelWX as a safety‑critical weather situational awareness/ops tool.
+     - Pointers to docs and philosophy (tests, clippy, fuzz, freeze).
+   - `.aicode`
+     - Primary AI instruction file.
+     - Defines priorities, allowed behaviors, and how to pick tasks from `docs/tasks.md`.
 
-3. **Exhaustive logic**
-   - For enums and branching logic, handle every case, even if it seems “stupid” or unlikely.
-   - Where external inputs are involved (APIs, config), treat them as untrusted:
-     - Validate ranges, types, and invariants.
-     - Fail **gracefully** with a clear error and logging, never by panicking.
+2. **Core process and rules**
+   - `docs/rules.md`
+     - Non‑negotiable rules: safety, security, correctness, tests‑first, code standards.
+     - Sections 5.2+ define freezing as a human decision and require respecting `docs/freeze.md`.
+   - `docs/freeze.md`
+     - Defines `mutable`, `review_only`, and `frozen`.
+     - Explains how humans freeze/unfreeze and how AI must treat each state.
 
-4. **File size limits**
-   - Target: **< 250 LOC per file**, hard maximum: **< 400 LOC per file** (excluding comments and whitespace).
-   - If a file approaches this limit, split into smaller modules.
+3. **Planning and status**
+   - `docs/roadmap.md`
+     - High‑level milestones M0–M8 and the intended evolution of the system.
+   - `docs/milestones.md`
+     - Short connector: milestone goals and status (`Not started / In progress / Complete`).
+     - Points to `docs/tasks.md` for actual work items.
+   - `docs/tasks.md`
+     - The **single source of truth** for concrete tasks.
+     - Organized by milestone with IDs, files to touch, and acceptance criteria.
 
-5. **Rust edition and toolchain**
-   - Code must compile cleanly with:
-     - Rust **1.93** and **2024 edition**.
-   - Prefer stable features; no nightly‑only APIs.
+4. **Architecture and design**
+   - `docs/architecture.md`
+     - High‑level architecture, components, data flow, and test layout.
 
-6. **Extensive testing, in separate files**
-   - **Every module and function with logic must have tests.**
-   - Tests must live under a separate `tests/` directory and files, not inline with production code:
-     - No `#[cfg(test)]` inline unit tests inside source files.
-   - Tests must cover:
-     - Normal cases.
-     - Edge cases.
-     - Error conditions and failure paths.
-   - When stuck or debugging, **write tests first** or expand existing tests to pin down behavior.
+5. **Other helpful docs**
+   - `CONTRIBUTING.md`
+     - Human contributor expectations; AI should mirror these checks when making changes.
+   - `docs/README.md`
+     - Index of all docs and their roles.
 
-7. **Safety‑critical Rust, always**
-   - No `unsafe` blocks, unless there is a documented, reviewed, and justified exception.
-   - Favor:
-     - Clear ownership and lifetimes.
-     - Minimal shared mutable state.
-     - Concurrency patterns that avoid data races and deadlocks (e.g., channels, actors, structured concurrency).
+The AI must not begin editing code or docs until it has at least skimmed all of the above.
 
-8. **No silent degradation without visibility**
-   - If you must fall back (e.g., missing data, degraded feed), emit structured logs and propagate a clear status up to callers.
-   - The system may continue operating in degraded mode, but operators must be able to see what degraded and why.
+---
 
-## 2. Security constraints
+## 2. Understanding freeze states
 
-- Do not add:
-  - Debug HTTP endpoints that expose internal state without auth.
-  - Backdoors or “temporary” shortcuts that bypass checks.
-- For any network‑facing code:
-  - Validate all input (query params, JSON bodies, headers).
-  - Enforce clear separation between read‑only and mutating operations.
-- Never:
-  - Log secrets or full credential material.
-  - Build SQL/command strings by concatenating untrusted input.
-  - Introduce dynamic code execution based on untrusted input.
-- When exposing the HTTP API:
-  - Assume it may eventually be reachable from untrusted networks.
-  - Design auth and authorization hooks now, even if initial deployments are local‑only.
+The freeze model is defined in detail in `docs/freeze.md`.  
+AI tools must actively check and respect freeze states **before** modifying any file.
 
-## 3. Data and APIs
+### 2.1 States
 
-- Only call APIs documented in `architecture.md` or explicitly referenced in code comments:
-  - NWS API, SPC MapServer, NHC GIS, MRMS/QPE, NOHRSC, USGS, NIFC, NCEI/CDO, Ambient Weather, mPING, and vendor APIs where configured. [web:4][web:63][web:7][web:89][web:90][web:95][web:98][web:101][web:102][web:103][web:104][web:107][web:108][web:109][web:116][web:117][web:121][web:133][web:136][web:139]
-- Never:
-  - Introduce new external services without design approval.
-  - Hard‑code secrets or credentials.
-  - Assume API responses are well‑formed; validate and handle errors.
+Each relevant file can be:
 
-## 4. Structure and style
+- `mutable`
+- `review_only`
+- `frozen`
 
-- Respect existing crate/module layout and names from `architecture.md`.
-- Keep functions short and single‑purpose; if a function grows large or complex, split it.
-- Prefer explicit types over “clever” type inference when clarity is improved.
-- Document:
-  - Public functions and types with Rustdoc.
-  - Non‑obvious invariants and assumptions in comments.
+The canonical information lives in:
 
-## 5. Logging and observability
+- `docs/freeze.md` (registry table).
+- In‑file markers, for example:
+  - Rust: `// SENTINELWX-FREEZE-STATE: mutable`
+  - Markdown: `<!-- SENTINELWX-FREEZE-STATE: review_only -->`
+  - Config/TOML: `# SENTINELWX-FREEZE-STATE: frozen`
 
-- For any non‑trivial error, log with enough context to debug:
-  - Source (plugin/module).
-  - Operation (e.g., “fetch NWS alerts”, “parse SPC outlook JSON”).
-  - Key parameters (e.g., URL, region, time).
-- Do not log sensitive data (keys, passwords, full personal info).
+### 2.2 AI behavior per state
 
-## 6. Testing guidance
+- `mutable`
+  - AI may read and modify as needed, **within the scope of the current task**.
+  - Changes must still follow all rules: tests‑first, minimal diffs, safety‑critical standards.
 
-- For each module:
-  - Create a corresponding test file under `tests/` (e.g., `tests/nws_ingest.rs` for `src/plugins/nws/ingest.rs`).
-- Tests should:
-  - Use recorded or synthetic JSON/GeoJSON/KML samples that represent real API responses.
-  - Assert on both success and failure cases.
-  - Cover alert rules, schedulers, and any conditional logic thoroughly.
+- `review_only`
+  - AI may read but **must not modify** by default.
+  - Exception: If the user explicitly instructs the AI to make a narrow change (e.g., fix a typo) and the file is `review_only` (not `frozen`), the AI may propose and apply the minimal edit.
+  - If a task appears to require edits to a `review_only` file:
+    - AI must call this out explicitly and ask the user or maintainer to either:
+      - Temporarily move the file back to `mutable`, or
+      - Perform the change manually.
 
-- When behavior is unclear:
-  - Write a test that encodes the intended behavior.
-  - Adjust implementation to satisfy the tests while respecting the project rules.
+- `frozen`
+  - AI must **never modify** or propose edits.
+  - If the user asks for a change to a `frozen` file:
+    - AI must explain that the file is frozen and request that a human:
+      - Update `docs/freeze.md` and the in‑file marker to unfreeze or downgrade the file, **before** any edits occur.
+  - AI must not create “work‑around” code that duplicates frozen logic elsewhere to avoid the freeze.
 
-## 7. Licensing and provenance
+When there is any discrepancy between markers and the registry, the AI must assume the stricter interpretation and alert the user.
 
-- All generated code must be compatible with:
-  - AGPL‑3.0 (open‑source side), and
-  - The project’s commercial dual‑licensing model. [web:145][web:149][web:150][web:152][web:156]
-- Do not paste or emulate code from incompatible‑license projects.
+---
 
-## 8. Human review
+## 3. How to pick and run tasks
 
-- AI‑generated changes must be reviewed by a human with Rust and domain experience.
-- If an AI suggestion conflicts with:
-  - This document,
-  - `architecture.md`,
-  - `rules.md`, or
-  - The maintainer’s explicit instructions,
-  **it must be discarded or corrected.**
+All AI work must be driven by **explicit tasks** from `docs/tasks.md` or from a direct user instruction that references a specific task.
+
+### 3.1 Selecting a task
+
+Unless the user specifies a task ID:
+
+1. Open `docs/tasks.md`.
+2. Identify the lowest‑numbered milestone that is not obviously complete (based on checkboxes and `docs/milestones.md`).
+3. Within that milestone, choose the first unchecked (`[ ]`) task.
+4. Announce which task you are working on, including its ID (e.g., `M0-003`).
+
+Rules:
+
+- Do **not** invent new tasks or IDs.
+- Do not mark tasks as obsolete, superseded, or deleted; only humans may do this.
+- Do not work on multiple tasks at once.
+- If the user explicitly names a task (e.g., “work on `M1-001`”):
+  - Obey the user, but still respect freeze rules and `.aicode`.
+
+### 3.2 One task at a time
+
+For the selected task:
+
+- Scope all changes to:
+  - The “Files to touch” listed for that task, plus any clearly necessary dependencies.
+- Avoid drive‑by refactors or style changes in unrelated files.
+- If you discover issues outside the task’s scope:
+  - Describe them briefly.
+  - Suggest they be captured as new tasks (by humans) in `docs/tasks.md`.
+
+The AI must not:
+
+- Start a new task before finishing the current one.
+- Mark any task `[x]` until the required command loop has been run and all acceptance criteria are satisfied.
+
+---
+
+## 4. Tests‑first and minimal‑change philosophy
+
+SentinelWX is safety‑critical.  
+AI tools must assume that correctness, robustness, and traceability matter more than speed or cleverness.
+
+### 4.1 Tests first
+
+Whenever you implement or change behavior:
+
+1. Identify relevant tests:
+   - Existing unit tests near the code.
+   - Integration tests in `tests/`.
+   - Any fuzz targets that touch the area.
+2. If tests do not exist:
+   - Add minimal, focused tests that express the intended behavior (happy path and key edge cases).
+3. Make tests fail in the intended way (if applicable).
+4. Implement the **smallest** necessary code change to make tests pass.
+
+Tests must be deterministic and must not depend on real external services or non‑reproducible data.
+
+### 4.2 Minimal diffs
+
+For any task:
+
+- Prefer small, isolated changes.
+- Avoid large refactors unless the task explicitly calls for them.
+- Do not rename, move, or reorganize code unless:
+  - It is required by the task.
+  - The change is clearly documented.
+- Do not rewrite entire files or APIs without a human explicitly instructing you to do so.
+
+---
+
+## 5. Mandatory command loop
+
+For **every** task, AI tools must run the following commands and use their output to drive fixes before marking the task complete.
+
+### 5.1 Required commands
+
+For the selected task:
+
+1. `cargo test`
+   - Run the full test suite unless the user explicitly narrows the scope.
+   - If tests fail:
+     - Read the failures carefully.
+     - Update tests and/or code minimally until all tests pass.
+
+2. `cargo clippy --all-targets --all-features -- -D warnings`
+   - Treat all clippy warnings as errors.
+   - Fix issues rather than suppressing them, unless suppression is explicitly justified by the rules and architecture.
+   - If a warning cannot reasonably be fixed:
+     - Explain why in the change notes.
+     - Use the narrowest possible `allow` with comments referencing the rationale.
+
+3. `cargo fuzz run <target>`
+   - For each fuzz target relevant to the code you changed (if those harnesses exist), run:
+     - `cargo fuzz run <target>`
+   - If fuzzing finds a crash or failure:
+     - Treat it as a bug.
+     - Fix the underlying issue.
+     - Add or update tests where appropriate, so the bug cannot silently reappear.
+
+These commands must be run **after** implementing the code changes and again after each significant fix, until all are clean.
+
+### 5.2 When commands fail
+
+If any of the required commands fail:
+
+- Do **not** mark the task as complete.
+- Use the failure output as guidance:
+  - For test failures:
+    - Improve code or tests to make behavior correct and deterministic.
+  - For clippy failures:
+    - Fix lints or justify minimal, explicit exceptions.
+  - For fuzz failures:
+    - Fix crashes, panics, or unexpected behavior.
+- Iterate:
+  - Apply minimal changes.
+  - Re‑run the relevant commands.
+- Only when the full set passes clean may you change `[ ]` to `[x]` for the task.
+
+If you cannot make progress without broad or risky changes, stop and ask the user for guidance.
+
+---
+
+## 6. Presenting changes and diffs
+
+When you finish working on a task (or an iteration of it), you must provide a clear summary of what you did.
+
+### 6.1 Required information
+
+For each completed or proposed change:
+
+- Task:
+  - Task ID and short title (e.g., `M0-003: Wire AI coding guidelines to actual repo structure`).
+- Files touched:
+  - List all modified files, with a quick note per file.
+  - For each file, indicate the freeze state **at the time of change** (`mutable`, `review_only`, or `frozen`).
+- Summary of changes:
+  - A brief, focused description of what changed and why.
+  - Highlight any behavior changes or new public interfaces.
+- Tests and commands:
+  - State explicitly which commands were run:
+    - `cargo test`
+    - `cargo clippy --all-targets --all-features -- -D warnings`
+    - `cargo fuzz run <target>` (list the targets)
+  - Confirm whether each command passed clean.
+  - Note any remaining warnings or limitations.
+
+### 6.2 Diffs
+
+When your environment supports it (e.g., IDE integration, pull request comments):
+
+- Show diffs grouped by file.
+- Keep changes as small and readable as possible.
+- Avoid mixing unrelated changes in a single diff.
+
+If a human requests more granular detail (e.g., function‑by‑function explanation), obey the request.
+
+---
+
+## 7. Alignment with human contributors
+
+AI tools must behave as if they are careful, junior contributors working under strict review from human maintainers.
+
+### 7.1 Matching CONTRIBUTING expectations
+
+- Mirror `CONTRIBUTING.md`:
+  - Run the same “before PR” checks:
+    - `cargo test`
+    - `cargo clippy --all-targets --all-features -- -D warnings`
+    - Relevant `cargo fuzz run <target>` for touched areas.
+  - Respect code review and style expectations.
+- Do not bypass review:
+  - Treat human maintainers as final decision‑makers.
+  - Do not override rules or guidelines on your own.
+
+### 7.2 No scope drift
+
+- Do not:
+  - Add new milestones.
+  - Change roadmap content.
+  - Invent undocumented features.
+- Only work on:
+  - Explicit tasks from `docs/tasks.md`, and/or
+  - Direct user instructions that are consistent with `.aicode` and `docs/rules.md`.
+
+If a user asks for something that conflicts with the rules (e.g., “just ignore clippy,” “edit a frozen file”), you must:
+
+- Explain the conflict clearly.
+- Offer safer alternatives.
+- Proceed only if the user explicitly acknowledges and directs you, and only where the rules allow such exceptions.
+
+---
+
+## 8. Summary checklist for AI tools
+
+Before starting work:
+
+- [ ] Read `README.md` and `.aicode`.
+- [ ] Read `docs/rules.md`, `docs/freeze.md`, `docs/roadmap.md`, `docs/milestones.md`, and `docs/tasks.md`.
+- [ ] Skim `docs/architecture.md` for relevant components.
+
+For each task:
+
+- [ ] Select one task from `docs/tasks.md` (or use the user‑specified ID).
+- [ ] Check freeze state for all files you intend to touch.
+- [ ] Write or update tests **first** (or in lockstep with code).
+- [ ] Implement the minimal code changes.
+- [ ] Run `cargo test`.
+- [ ] Run `cargo clippy --all-targets --all-features -- -D warnings`.
+- [ ] Run `cargo fuzz run <target>` for relevant fuzz targets, if they exist.
+- [ ] Fix issues and re‑run commands until all pass clean.
+- [ ] Summarize changes, list touched files and freeze states, and report command outcomes.
+- [ ] Only then, change the task’s checkbox from `[ ]` to `[x]`.
+
+AI tools must treat these guidelines as mandatory operational procedures, not suggestions.
